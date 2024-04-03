@@ -11,18 +11,28 @@ import { parse } from "node:path";
 
 describe("Lucky Catoshi ERC20", function () {
   async function deployFixture() {
-    const [owner, addr1, addr2, pairAddr] = await hre.ethers.getSigners();
+    const [owner, addr1, addr2, pairAddr, dev, market] =
+      await hre.ethers.getSigners();
 
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
-    const catoshi = await Catoshi.deploy();
+    const catoshi = await Catoshi.deploy(market.address, dev.address);
     const catoshiAddress = catoshi.getAddress();
 
-    return { owner, addr1, addr2, pairAddr, catoshi, catoshiAddress };
+    return {
+      owner,
+      addr1,
+      addr2,
+      pairAddr,
+      dev,
+      market,
+      catoshi,
+      catoshiAddress,
+    };
   }
 
   describe("Deployment", function () {
     it("Should have correct initial configuration", async function () {
-      const { catoshi, catoshiAddress, owner } = await loadFixture(
+      const { catoshi, catoshiAddress, owner, dev, market } = await loadFixture(
         deployFixture
       );
 
@@ -32,7 +42,15 @@ describe("Lucky Catoshi ERC20", function () {
       const totalSupply = await catoshi.totalSupply();
       expect(totalSupply).to.equal(parseUnits("1000000000", 9));
       expect(await catoshi.owner()).to.equal(owner.address);
-      expect(await catoshi.balanceOf(owner.address)).to.equal(totalSupply);
+      expect(await catoshi.balanceOf(owner.address)).to.equal(
+        parseUnits("760000000", 9)
+      );
+      expect(await catoshi.balanceOf(market.address)).to.equal(
+        parseUnits("180000000", 9)
+      );
+      expect(await catoshi.balanceOf(dev.address)).to.equal(
+        parseUnits("60000000", 9)
+      );
       expect(await catoshi.decimals()).to.equal(9);
     });
   });
@@ -45,7 +63,7 @@ describe("Lucky Catoshi ERC20", function () {
       expect(await catoshi.balanceOf(addr1.address)).to.equal(1000);
 
       const ownerBalance = await catoshi.balanceOf(owner.address);
-      expect(ownerBalance).to.equal("999999999999999000");
+      expect(ownerBalance).to.equal("759999999999999000");
     });
 
     it("Should transfer tokens after launch", async function () {
@@ -54,7 +72,7 @@ describe("Lucky Catoshi ERC20", function () {
       );
 
       await catoshi.transfer(addr1.address, 1000);
-      await catoshi.addSwapPair(pairAddr);
+      await catoshi.setLaunch();
 
       await catoshi.connect(addr1).transfer(addr2.address, 100);
       expect(await catoshi.balanceOf(addr1.address)).to.equal(900);
@@ -75,7 +93,7 @@ describe("Lucky Catoshi ERC20", function () {
         deployFixture
       );
 
-      await catoshi.addSwapPair(pairAddr);
+      await catoshi.setLaunch();
 
       await expect(
         catoshi.connect(addr1).transfer(addr2.address, 100)
@@ -90,7 +108,7 @@ describe("Lucky Catoshi ERC20", function () {
       );
 
       await catoshi.transfer(addr1.address, parseUnits("1", 9));
-      await catoshi.addSwapPair(pairAddr);
+      await catoshi.setLaunch();
 
       await catoshi.burn(parseUnits("1", 9));
       await catoshi.connect(addr1).burn(parseUnits("1", 9));

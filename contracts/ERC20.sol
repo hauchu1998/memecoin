@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 error NotLaunched();
 error InvalidInput();
@@ -16,8 +17,9 @@ error InvalidTxAmount();
 error InvalidWalletAmount();
 
 contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
-    address public marketingWallet = 0xd1665Cc71Df93b8E5eb9D4750eE6BDd7f14C7841;
-    address public devWallet = 0xd1665Cc71Df93b8E5eb9D4750eE6BDd7f14C7841;
+    using SafeMath for uint256;
+    address public marketingWallet;
+    address public devWallet;
 
     address DEAD = 0x000000000000000000000000000000000000dEaD;
     address ZERO = 0x0000000000000000000000000000000000000000;
@@ -37,6 +39,8 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
 
     event Launch();
     event AdminGranted(address indexed account, bool isAdmin);
+    event BlackList(address indexed blackListed, bool value);
+    event SetMarketPair(address indexed pair, bool value);
 
     bool public swapping;
     modifier onlySwapping() {
@@ -45,14 +49,22 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         swapping = false;
     }
 
-    constructor() Ownable() ERC20(_name, _symbol) ERC20Permit(_name) {
+    constructor(
+        address _marketWallet,
+        address _devWallet
+    ) Ownable() ERC20(_name, _symbol) ERC20Permit(_name) {
         isTxLimitExempt[DEAD] = true;
         isTxLimitExempt[ZERO] = true;
         isTxLimitExempt[owner()] = true;
         isTxLimitExempt[address(this)] = true;
 
+        marketingWallet = _marketWallet;
+        devWallet = _devWallet;
+
         uint256 _totalSupply = 1 * 10 ** 9 * 10 ** _decimals; // 10B
-        _mint(owner(), _totalSupply);
+        _mint(marketingWallet, _totalSupply.mul(18).div(100)); // 18%, for airdrop, marketing
+        _mint(devWallet, _totalSupply.mul(6).div(100)); // 6%, for dev
+        _mint(owner(), _totalSupply.mul(76).div(100)); // 76%, for liquidity and burns
     }
 
     function decimals() public view virtual override returns (uint8) {
@@ -64,10 +76,15 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         bool _isBlacklisting
     ) external onlyOwner {
         blacklists[_address] = _isBlacklisting;
+        emit BlackList(_address, _isBlacklisting);
     }
 
     function setMarketPairStatus(address pair, bool status) public onlyOwner {
         isMarketPair[pair] = status;
+        if (status) {
+            isTxLimitExempt[pair] = true;
+        }
+        emit SetMarketPair(pair, status);
     }
 
     function setLimitsHolding(
@@ -86,13 +103,9 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         maxHoldingAmount = 0;
     }
 
-    function addSwapPair(address pair) external onlyOwner {
-        if (!launched) {
-            launched = true;
-            emit Launch();
-        }
-
-        isMarketPair[pair] = true;
+    function setLaunch() external onlyOwner {
+        launched = true;
+        emit Launch();
     }
 
     function grantAllAccess(address account, bool value) external onlyOwner {
