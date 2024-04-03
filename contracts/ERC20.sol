@@ -81,9 +81,6 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
 
     function setMarketPairStatus(address pair, bool status) public onlyOwner {
         isMarketPair[pair] = status;
-        if (status) {
-            isTxLimitExempt[pair] = true;
-        }
         emit SetMarketPair(pair, status);
     }
 
