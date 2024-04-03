@@ -16,7 +16,15 @@ describe("Lucky Catoshi ERC20", function () {
 
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
     const catoshi = await Catoshi.deploy(market.address, dev.address);
-    const catoshiAddress = catoshi.getAddress();
+    const catoshiAddress = await catoshi.getAddress();
+
+    const domainData = {
+      name: "Lucky Catoshi",
+      version: "1",
+      chainId: hre.network.config.chainId as number,
+      verifyingContract: catoshiAddress,
+      salt: null,
+    };
 
     return {
       owner,
@@ -27,6 +35,7 @@ describe("Lucky Catoshi ERC20", function () {
       market,
       catoshi,
       catoshiAddress,
+      domainData,
     };
   }
 
@@ -114,6 +123,45 @@ describe("Lucky Catoshi ERC20", function () {
       await catoshi.connect(addr1).burn(parseUnits("1", 9));
       expect(await catoshi.balanceOf(addr1.address)).to.equal(0);
       expect(await catoshi.totalSupply()).to.equal(parseUnits("999999998", 9));
+    });
+  });
+
+  describe("Slot Machine", function () {
+    function getSlotMessage(player: string, slot: number) {
+      const typesData = {
+        ClaimSlotPrize: [
+          { name: "player", type: "address" },
+          { name: "slot", type: "uint16" },
+        ],
+      };
+
+      const messageData = {
+        player,
+        slot,
+      };
+
+      return { claimTypes: typesData, claimData: messageData };
+    }
+    it("Should burn tokens", async function () {
+      const { catoshi, addr1, market, domainData } = await loadFixture(
+        deployFixture
+      );
+      await catoshi.setSlotPrize(777, parseUnits("1000", 9));
+      await catoshi.setLaunch();
+
+      const { claimTypes, claimData } = getSlotMessage(addr1.address, 777);
+      const signature = await market.signTypedData(
+        domainData,
+        claimTypes,
+        claimData
+      );
+      await catoshi.connect(addr1).claimSlotPrize(777, signature);
+      expect(await catoshi.balanceOf(addr1.address)).to.equal(
+        parseUnits("1000", 9)
+      );
+      expect(await catoshi.balanceOf(market.address)).to.equal(
+        parseUnits("179999000", 9)
+      );
     });
   });
 });
