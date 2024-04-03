@@ -11,13 +11,13 @@ import { parse } from "node:path";
 
 describe("Lucky Catoshi ERC20", function () {
   async function deployFixture() {
-    const [owner, addr1, addr2] = await hre.ethers.getSigners();
+    const [owner, addr1, addr2, pairAddr] = await hre.ethers.getSigners();
 
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
     const catoshi = await Catoshi.deploy();
     const catoshiAddress = catoshi.getAddress();
 
-    return { owner, addr1, addr2, catoshi, catoshiAddress };
+    return { owner, addr1, addr2, pairAddr, catoshi, catoshiAddress };
   }
 
   describe("Deployment", function () {
@@ -49,10 +49,12 @@ describe("Lucky Catoshi ERC20", function () {
     });
 
     it("Should transfer tokens after launch", async function () {
-      const { catoshi, owner, addr1, addr2 } = await loadFixture(deployFixture);
+      const { catoshi, owner, addr1, addr2, pairAddr } = await loadFixture(
+        deployFixture
+      );
 
       await catoshi.transfer(addr1.address, 1000);
-      await catoshi.setLaunch();
+      await catoshi.addSwapPair(pairAddr);
 
       await catoshi.connect(addr1).transfer(addr2.address, 100);
       expect(await catoshi.balanceOf(addr1.address)).to.equal(900);
@@ -61,6 +63,7 @@ describe("Lucky Catoshi ERC20", function () {
 
     it("Should fail if not launch", async function () {
       const { catoshi, addr1, addr2 } = await loadFixture(deployFixture);
+      await catoshi.transfer(addr1.address, 1000);
 
       await expect(
         catoshi.connect(addr1).transfer(addr2.address, 100)
@@ -68,9 +71,11 @@ describe("Lucky Catoshi ERC20", function () {
     });
 
     it("Should fail if not enough token", async function () {
-      const { catoshi, addr1, addr2 } = await loadFixture(deployFixture);
+      const { catoshi, addr1, addr2, pairAddr } = await loadFixture(
+        deployFixture
+      );
 
-      await catoshi.setLaunch();
+      await catoshi.addSwapPair(pairAddr);
 
       await expect(
         catoshi.connect(addr1).transfer(addr2.address, 100)
@@ -80,10 +85,12 @@ describe("Lucky Catoshi ERC20", function () {
 
   describe("Burn", function () {
     it("Should burn tokens", async function () {
-      const { catoshi, owner, addr1, addr2 } = await loadFixture(deployFixture);
+      const { catoshi, owner, addr1, pairAddr } = await loadFixture(
+        deployFixture
+      );
 
       await catoshi.transfer(addr1.address, parseUnits("1", 9));
-      await catoshi.setLaunch();
+      await catoshi.addSwapPair(pairAddr);
 
       await catoshi.burn(parseUnits("1", 9));
       await catoshi.connect(addr1).burn(parseUnits("1", 9));
