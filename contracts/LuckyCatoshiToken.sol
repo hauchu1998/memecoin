@@ -94,13 +94,6 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         _grantAllAccess(account, value);
     }
 
-    function transferToAddressETH(
-        address payable recipient,
-        uint256 amount
-    ) private {
-        recipient.transfer(amount);
-    }
-
     //to recieve ETH from uniswapV2Router when swaping
     receive() external payable {}
 
