@@ -18,6 +18,7 @@ error InvalidFeeConfig();
 error InvalidTxAmount();
 error InvalidWalletAmount();
 error InvalidSignature();
+error InvalidMsgSender();
 
 contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     using SafeMath for uint256;
@@ -31,18 +32,12 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
 
     string private _name = "Lucky Catoshi";
     string private _symbol = "LUCK";
-    uint8 private _decimals = 9;
     bool public launched;
-
-    bool public limited;
-    uint256 public minHoldingAmount = 0;
-    uint256 public maxHoldingAmount = 0;
 
     bytes32 private constant CLAIM_PRIZE_TYPEHASH =
         keccak256("ClaimSlotPrize(address player,uint16 slot)");
 
     mapping(address => bool) public isTxLimitExempt;
-    mapping(address => bool) public isMarketPair;
     mapping(address => bool) public blacklists;
     mapping(uint16 => uint256) public slotPrizes;
 
@@ -78,14 +73,10 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         isTxLimitExempt[_marketWallet] = true;
         isTxLimitExempt[_devWallet] = true;
 
-        uint256 _totalSupply = 1 * 10 ** 9 * 10 ** _decimals; // 10B
-        _mint(marketingWallet, _totalSupply.mul(18).div(100)); // 18%, for airdrop, marketing
-        _mint(devWallet, _totalSupply.mul(6).div(100)); // 6%, for dev
-        _mint(owner(), _totalSupply.mul(76).div(100)); // 76%, for liquidity and burns
-    }
-
-    function decimals() public view virtual override returns (uint8) {
-        return _decimals;
+        uint256 _totalSupply = 1_000_000_000 ether; // 1B
+        _mint(marketingWallet, _totalSupply.mul(15).div(100)); // 15%, for airdrop, marketing
+        _mint(devWallet, _totalSupply.mul(10).div(100)); // 10%, for CEX, dev team, burns
+        _mint(owner(), _totalSupply.mul(75).div(100)); // 75%, for liquidity
     }
 
     function setBlacklist(
@@ -94,27 +85,6 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     ) external onlyOwner {
         blacklists[_address] = _isBlacklisting;
         emit BlackList(_address, _isBlacklisting);
-    }
-
-    function setMarketPairStatus(address pair, bool status) public onlyOwner {
-        isMarketPair[pair] = status;
-        emit SetMarketPair(pair, status);
-    }
-
-    function setLimitsHolding(
-        bool _limited,
-        uint256 _minHoldingAmount,
-        uint256 _maxHoldingAmount
-    ) external onlyOwner {
-        limited = _limited;
-        minHoldingAmount = _minHoldingAmount;
-        maxHoldingAmount = _maxHoldingAmount;
-    }
-
-    function removeLimitsHolding() external onlyOwner {
-        limited = false;
-        minHoldingAmount = 0;
-        maxHoldingAmount = 0;
     }
 
     function setLaunch() external onlyOwner {
@@ -158,8 +128,13 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     }
 
     // prob need signedDataType for slot machine game to claim reward.
-    function claimSlotPrize(uint16 _slot, bytes calldata _signedData) external {
-        address player = msg.sender;
+    function claimSlotPrize(
+        address player,
+        uint16 _slot,
+        bytes calldata _signedData
+    ) external {
+        if (msg.sender != marketingWallet) revert InvalidMsgSender();
+
         bytes32 _digest = _hashTypedDataV4(
             keccak256(abi.encode(CLAIM_PRIZE_TYPEHASH, player, _slot))
         );
@@ -170,7 +145,7 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
 
         uint256 prize = slotPrizes[_slot];
         if (prize > 0) {
-            _transfer(marketingWallet, player, prize);
+            transfer(player, prize);
             emit ClaimSlotPrize(_slot, player, prize);
         }
     }
@@ -192,18 +167,11 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         address to,
         uint256 amount
     ) internal virtual override {
+        amount = amount;
         if (!launched && !isTxLimitExempt[from] && !isTxLimitExempt[to])
             revert NotLaunched();
 
         if (blacklists[from] || blacklists[to]) revert BlacklistDectected();
-
-        if (limited && isMarketPair[from]) {
-            if (amount + balanceOf(to) < minHoldingAmount)
-                revert InvalidWalletAmount();
-
-            if (amount + balanceOf(to) > maxHoldingAmount)
-                revert InvalidWalletAmount();
-        }
     }
 
     function _grantAllAccess(address account, bool value) internal virtual {
