@@ -29,6 +29,42 @@ const config: HardhatUserConfig = {
       gasPrice: "auto",
       initialBaseFeePerGas: 30924770965,
     },
+    // for mainnet
+    "base-mainnet": {
+      url: "https://mainnet.base.org",
+      accounts: [process.env.WALLET_KEY as string],
+      gasPrice: 1000000000,
+    },
+    // for testnet
+    "base-sepolia": {
+      url: "https://sepolia.base.org",
+      accounts: [process.env.WALLET_KEY as string],
+      gasPrice: 1000000000,
+    },
+  },
+  etherscan: {
+    apiKey: {
+      "base-sepolia": "PLACEHOLDER_STRING",
+      "base-mainnet": (process.env.ETHERSCAN_API_KEY as string) || "",
+    },
+    customChains: [
+      {
+        network: "base-sepolia",
+        chainId: 84532,
+        urls: {
+          apiURL: "https://api-sepolia.basescan.org/api",
+          browserURL: "https://sepolia.basescan.org",
+        },
+      },
+      {
+        network: "base-mainnet",
+        chainId: 8453,
+        urls: {
+          apiURL: "https://api-mainnet.basescan.org/api",
+          browserURL: "https://mainnet.basescan.org",
+        },
+      },
+    ],
   },
 };
 
