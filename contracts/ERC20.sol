@@ -6,6 +6,8 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 error NotLaunched();
 error InvalidInput();
@@ -15,9 +17,12 @@ error InvalidSwapAmountConfig();
 error InvalidFeeConfig();
 error InvalidTxAmount();
 error InvalidWalletAmount();
+error InvalidSignature();
 
 contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     using SafeMath for uint256;
+    using ECDSA for bytes32;
+
     address public marketingWallet;
     address public devWallet;
 
@@ -33,14 +38,24 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     uint256 public minHoldingAmount = 0;
     uint256 public maxHoldingAmount = 0;
 
+    bytes32 private constant CLAIM_PRIZE_TYPEHASH =
+        keccak256("ClaimSlotPrize(address player,uint16 slot)");
+
     mapping(address => bool) public isTxLimitExempt;
     mapping(address => bool) public isMarketPair;
     mapping(address => bool) public blacklists;
+    mapping(uint16 => uint256) public slotPrizes;
 
     event Launch();
     event AdminGranted(address indexed account, bool isAdmin);
     event BlackList(address indexed blackListed, bool value);
     event SetMarketPair(address indexed pair, bool value);
+    event SetSlotPrize(uint16 indexed slot, uint256 prize);
+    event ClaimSlotPrize(
+        uint16 indexed slot,
+        address indexed player,
+        uint256 prize
+    );
 
     bool public swapping;
     modifier onlySwapping() {
@@ -53,13 +68,15 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         address _marketWallet,
         address _devWallet
     ) Ownable() ERC20(_name, _symbol) ERC20Permit(_name) {
+        marketingWallet = _marketWallet;
+        devWallet = _devWallet;
+
         isTxLimitExempt[DEAD] = true;
         isTxLimitExempt[ZERO] = true;
         isTxLimitExempt[owner()] = true;
         isTxLimitExempt[address(this)] = true;
-
-        marketingWallet = _marketWallet;
-        devWallet = _devWallet;
+        isTxLimitExempt[_marketWallet] = true;
+        isTxLimitExempt[_devWallet] = true;
 
         uint256 _totalSupply = 1 * 10 ** 9 * 10 ** _decimals; // 10B
         _mint(marketingWallet, _totalSupply.mul(18).div(100)); // 18%, for airdrop, marketing
@@ -105,6 +122,11 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         emit Launch();
     }
 
+    function setSlotPrize(uint16 slot, uint256 prize) external onlyOwner {
+        slotPrizes[slot] = prize;
+        emit SetSlotPrize(slot, prize);
+    }
+
     function grantAllAccess(address account, bool value) external onlyOwner {
         _grantAllAccess(account, value);
     }
@@ -133,6 +155,34 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         for (uint256 i = 0; i < _addresses.length; i++) {
             _transfer(msg.sender, _addresses[i], _amounts[i]);
         }
+    }
+
+    // prob need signedDataType for slot machine game to claim reward.
+    function claimSlotPrize(uint16 _slot, bytes calldata _signedData) external {
+        address player = msg.sender;
+        bytes32 _digest = _hashTypedDataV4(
+            keccak256(abi.encode(CLAIM_PRIZE_TYPEHASH, player, _slot))
+        );
+
+        if (ECDSA.recover(_digest, _signedData) != marketingWallet) {
+            revert InvalidSignature();
+        }
+
+        uint256 prize = slotPrizes[_slot];
+        if (prize > 0) {
+            _transfer(marketingWallet, player, prize);
+            emit ClaimSlotPrize(_slot, player, prize);
+        }
+    }
+
+    function verifySignature(
+        uint16 _slot,
+        bytes calldata _signedData
+    ) external view returns (address player) {
+        bytes32 _digest = _hashTypedDataV4(
+            keccak256(abi.encode(CLAIM_PRIZE_TYPEHASH, msg.sender, _slot))
+        );
+        player = ECDSA.recover(_digest, _signedData);
     }
 
     // The following functions are overrides required by Solidity.
