@@ -2,6 +2,9 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
 import "hardhat-gas-reporter";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -19,8 +22,7 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       forking: {
-        url: "https://eth-mainnet.alchemyapi.io/v2/ZZf5XSGkWknONbRlieQuaohaFuPUGoy5",
-        // url: "https://mainnet.infura.io/v3/9c57f4f3bbc44000a5561caa817bfff3",
+        url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
         blockNumber: 19591554,
       },
       gas: "auto",

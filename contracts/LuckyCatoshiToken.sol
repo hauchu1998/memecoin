@@ -52,13 +52,6 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         uint256 prize
     );
 
-    bool public swapping;
-    modifier onlySwapping() {
-        swapping = true;
-        _;
-        swapping = false;
-    }
-
     constructor(
         address _marketWallet,
         address _devWallet
