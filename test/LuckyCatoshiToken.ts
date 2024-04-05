@@ -14,9 +14,14 @@ describe("Lucky Catoshi ERC20", function () {
     const [owner, addr1, addr2, pairAddr, dev, market] =
       await hre.ethers.getSigners();
 
+    const uniswapRouter = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
-    const catoshi = await Catoshi.deploy(market.address, dev.address);
+
+    const catoshi = await Catoshi.deploy(market.address, dev.address, {
+      maxFeePerGas: 33000000000,
+    });
     const catoshiAddress = await catoshi.getAddress();
+    const decimals = await catoshi.decimals();
 
     const domainData = {
       name: "Lucky Catoshi",
@@ -36,12 +41,13 @@ describe("Lucky Catoshi ERC20", function () {
       catoshi,
       catoshiAddress,
       domainData,
+      decimals,
     };
   }
 
   describe("Deployment", function () {
     it("Should have correct initial configuration", async function () {
-      const { catoshi, catoshiAddress, owner, dev, market } = await loadFixture(
+      const { catoshi, decimals, owner, dev, market } = await loadFixture(
         deployFixture
       );
 
@@ -49,18 +55,18 @@ describe("Lucky Catoshi ERC20", function () {
       expect(await catoshi.symbol()).to.equal("LUCK");
 
       const totalSupply = await catoshi.totalSupply();
-      expect(totalSupply).to.equal(parseUnits("1000000000", 9));
+      expect(totalSupply).to.equal(parseUnits("1000000000", decimals));
       expect(await catoshi.owner()).to.equal(owner.address);
       expect(await catoshi.balanceOf(owner.address)).to.equal(
-        parseUnits("760000000", 9)
+        parseUnits("750000000", decimals)
       );
       expect(await catoshi.balanceOf(market.address)).to.equal(
-        parseUnits("180000000", 9)
+        parseUnits("150000000", decimals)
       );
       expect(await catoshi.balanceOf(dev.address)).to.equal(
-        parseUnits("60000000", 9)
+        parseUnits("100000000", decimals)
       );
-      expect(await catoshi.decimals()).to.equal(9);
+      expect(await catoshi.decimals()).to.equal(18);
     });
   });
 
@@ -72,7 +78,7 @@ describe("Lucky Catoshi ERC20", function () {
       expect(await catoshi.balanceOf(addr1.address)).to.equal(1000);
 
       const ownerBalance = await catoshi.balanceOf(owner.address);
-      expect(ownerBalance).to.equal("759999999999999000");
+      expect(ownerBalance).to.equal("749999999999999999999999000");
     });
 
     it("Should transfer tokens after launch", async function () {
@@ -112,17 +118,17 @@ describe("Lucky Catoshi ERC20", function () {
 
   describe("Burn", function () {
     it("Should burn tokens", async function () {
-      const { catoshi, owner, addr1, pairAddr } = await loadFixture(
-        deployFixture
-      );
+      const { catoshi, addr1, decimals } = await loadFixture(deployFixture);
 
-      await catoshi.transfer(addr1.address, parseUnits("1", 9));
+      await catoshi.transfer(addr1.address, parseUnits("1", decimals));
       await catoshi.setLaunch();
 
-      await catoshi.burn(parseUnits("1", 9));
-      await catoshi.connect(addr1).burn(parseUnits("1", 9));
+      await catoshi.burn(parseUnits("1", decimals));
+      await catoshi.connect(addr1).burn(parseUnits("1", decimals));
       expect(await catoshi.balanceOf(addr1.address)).to.equal(0);
-      expect(await catoshi.totalSupply()).to.equal(parseUnits("999999998", 9));
+      expect(await catoshi.totalSupply()).to.equal(
+        parseUnits("999999998", decimals)
+      );
     });
   });
 
@@ -142,11 +148,10 @@ describe("Lucky Catoshi ERC20", function () {
 
       return { claimTypes: typesData, claimData: messageData };
     }
-    it("Should burn tokens", async function () {
-      const { catoshi, addr1, market, domainData } = await loadFixture(
-        deployFixture
-      );
-      await catoshi.setSlotPrize(777, parseUnits("1000", 9));
+    it("Should claim prize", async function () {
+      const { catoshi, addr1, market, domainData, decimals } =
+        await loadFixture(deployFixture);
+      await catoshi.setSlotPrize(777, parseUnits("1000", decimals));
       await catoshi.setLaunch();
 
       const { claimTypes, claimData } = getSlotMessage(addr1.address, 777);
@@ -155,13 +160,47 @@ describe("Lucky Catoshi ERC20", function () {
         claimTypes,
         claimData
       );
-      await catoshi.connect(addr1).claimSlotPrize(777, signature);
+      await catoshi.connect(market).claimSlotPrize(addr1, 777, signature);
       expect(await catoshi.balanceOf(addr1.address)).to.equal(
-        parseUnits("1000", 9)
+        parseUnits("1000", decimals)
       );
       expect(await catoshi.balanceOf(market.address)).to.equal(
-        parseUnits("179999000", 9)
+        parseUnits("149999000", decimals)
       );
+    });
+
+    it("Should fail if wrong sender", async function () {
+      const { catoshi, owner, addr1, market, domainData, decimals } =
+        await loadFixture(deployFixture);
+      await catoshi.setSlotPrize(777, parseUnits("1000", decimals));
+      await catoshi.setLaunch();
+
+      const { claimTypes, claimData } = getSlotMessage(addr1.address, 777);
+      const signature = await market.signTypedData(
+        domainData,
+        claimTypes,
+        claimData
+      );
+      await expect(
+        catoshi.connect(owner).claimSlotPrize(addr1, 777, signature)
+      ).to.be.revertedWithCustomError(catoshi, "InvalidMsgSender");
+    });
+
+    it("Should fail if invalid signature", async function () {
+      const { catoshi, owner, addr1, market, domainData, decimals } =
+        await loadFixture(deployFixture);
+      await catoshi.setSlotPrize(777, parseUnits("1000", decimals));
+      await catoshi.setLaunch();
+
+      const { claimTypes, claimData } = getSlotMessage(addr1.address, 77);
+      const signature = await market.signTypedData(
+        domainData,
+        claimTypes,
+        claimData
+      );
+      await expect(
+        catoshi.connect(market).claimSlotPrize(addr1, 777, signature)
+      ).to.be.revertedWithCustomError(catoshi, "InvalidSignature");
     });
   });
 });
