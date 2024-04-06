@@ -12,7 +12,6 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 error NotLaunched();
 error InvalidInput();
 error BlacklistDectected();
-error InvalidBalanceOf(address account);
 error InvalidSwapAmountConfig();
 error InvalidFeeConfig();
 error InvalidTxAmount();
@@ -100,11 +99,9 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     // airdrop from mint token or minted token
     function airdrop(
         address[] memory _addresses,
-        uint256[] memory _amounts,
-        uint256 _totalAmount
-    ) external onlyOwner {
-        if (balanceOf(msg.sender) < _totalAmount)
-            revert InvalidBalanceOf(msg.sender);
+        uint256[] memory _amounts
+    ) external {
+        if (msg.sender != marketingWallet) revert InvalidMsgSender();
 
         if (_addresses.length != _amounts.length) revert InvalidInput();
 

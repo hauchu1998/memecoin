@@ -203,4 +203,27 @@ describe("Lucky Catoshi ERC20", function () {
       ).to.be.revertedWithCustomError(catoshi, "InvalidSignature");
     });
   });
+
+  describe("Aridop", function () {
+    it("Should aridop", async function () {
+      const { catoshi, owner, addr1, addr2, market, pairAddr } =
+        await loadFixture(deployFixture);
+
+      await catoshi
+        .connect(market)
+        .airdrop([addr1.address, addr2.address], [1000, 500]);
+
+      expect(await catoshi.balanceOf(addr1.address)).to.equal(1000);
+      expect(await catoshi.balanceOf(addr2.address)).to.equal(500);
+    });
+
+    it("Should fail with wrong sender", async function () {
+      const { catoshi, owner, addr1, addr2, market, pairAddr } =
+        await loadFixture(deployFixture);
+
+      await expect(
+        catoshi.airdrop([addr1.address, addr2.address], [1000, 500])
+      ).to.be.revertedWithCustomError(catoshi, "InvalidMsgSender");
+    });
+  });
 });
