@@ -116,8 +116,6 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         uint16 _slot,
         bytes calldata _signedData
     ) external {
-        if (msg.sender != marketingWallet) revert InvalidMsgSender();
-
         bytes32 _digest = _hashTypedDataV4(
             keccak256(abi.encode(CLAIM_PRIZE_TYPEHASH, player, _slot))
         );
