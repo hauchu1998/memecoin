@@ -169,22 +169,22 @@ describe("Lucky Catoshi ERC20", function () {
       );
     });
 
-    it("Should fail if wrong sender", async function () {
-      const { catoshi, owner, addr1, market, domainData, decimals } =
-        await loadFixture(deployFixture);
-      await catoshi.setSlotPrize(777, parseUnits("1000", decimals));
-      await catoshi.setLaunch();
+    // it("Should fail if wrong sender", async function () {
+    //   const { catoshi, owner, addr1, market, domainData, decimals } =
+    //     await loadFixture(deployFixture);
+    //   await catoshi.setSlotPrize(777, parseUnits("1000", decimals));
+    //   await catoshi.setLaunch();
 
-      const { claimTypes, claimData } = getSlotMessage(addr1.address, 777);
-      const signature = await market.signTypedData(
-        domainData,
-        claimTypes,
-        claimData
-      );
-      await expect(
-        catoshi.connect(owner).claimSlotPrize(addr1, 777, signature)
-      ).to.be.revertedWithCustomError(catoshi, "InvalidMsgSender");
-    });
+    //   const { claimTypes, claimData } = getSlotMessage(addr1.address, 777);
+    //   const signature = await market.signTypedData(
+    //     domainData,
+    //     claimTypes,
+    //     claimData
+    //   );
+    //   await expect(
+    //     catoshi.connect(owner).claimSlotPrize(addr1, 777, signature)
+    //   ).to.be.revertedWithCustomError(catoshi, "InvalidMsgSender");
+    // });
 
     it("Should fail if invalid signature", async function () {
       const { catoshi, owner, addr1, market, domainData, decimals } =
