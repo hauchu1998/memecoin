@@ -23,6 +23,7 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
+    address public liquidityWallet;
     address public marketingWallet;
     address public devWallet;
 
@@ -52,23 +53,25 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     );
 
     constructor(
+        address _liquitidyWallet,
         address _marketWallet,
         address _devWallet
     ) Ownable() ERC20(_name, _symbol) ERC20Permit(_name) {
+        liquidityWallet = _liquitidyWallet;
         marketingWallet = _marketWallet;
         devWallet = _devWallet;
 
         isTxLimitExempt[DEAD] = true;
         isTxLimitExempt[ZERO] = true;
-        isTxLimitExempt[owner()] = true;
         isTxLimitExempt[address(this)] = true;
+        isTxLimitExempt[_liquitidyWallet] = true;
         isTxLimitExempt[_marketWallet] = true;
         isTxLimitExempt[_devWallet] = true;
 
         uint256 _totalSupply = 1_000_000_000 ether; // 1B
-        _mint(marketingWallet, _totalSupply.mul(15).div(100)); // 15%, for airdrop, marketing
-        _mint(devWallet, _totalSupply.mul(10).div(100)); // 10%, for CEX, dev team, burns
-        _mint(owner(), _totalSupply.mul(75).div(100)); // 75%, for liquidity
+        _mint(marketingWallet, _totalSupply.mul(40).div(100)); // 40%, for airdrop, marketing
+        _mint(devWallet, _totalSupply.mul(10).div(100)); // 10%, for CEX, dev team, burns + treasury
+        _mint(liquidityWallet, _totalSupply.mul(50).div(100)); // 50%, for liquidity
     }
 
     function setBlacklist(
@@ -129,16 +132,6 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
             transfer(player, prize);
             emit ClaimSlotPrize(_slot, player, prize);
         }
-    }
-
-    function verifySignature(
-        uint16 _slot,
-        bytes calldata _signedData
-    ) external view returns (address player) {
-        bytes32 _digest = _hashTypedDataV4(
-            keccak256(abi.encode(CLAIM_PRIZE_TYPEHASH, msg.sender, _slot))
-        );
-        player = ECDSA.recover(_digest, _signedData);
     }
 
     // The following functions are overrides required by Solidity.

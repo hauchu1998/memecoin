@@ -11,15 +11,20 @@ import { parse } from "node:path";
 
 describe("Lucky Catoshi ERC20", function () {
   async function deployFixture() {
-    const [owner, addr1, addr2, pairAddr, dev, market] =
+    const [owner, addr1, addr2, pairAddr, liquidity, dev, market] =
       await hre.ethers.getSigners();
 
     const uniswapRouter = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
 
-    const catoshi = await Catoshi.deploy(market.address, dev.address, {
-      maxFeePerGas: 33000000000,
-    });
+    const catoshi = await Catoshi.deploy(
+      liquidity.address,
+      market.address,
+      dev.address,
+      {
+        maxFeePerGas: 33000000000,
+      }
+    );
     const catoshiAddress = await catoshi.getAddress();
     const decimals = await catoshi.decimals();
 
