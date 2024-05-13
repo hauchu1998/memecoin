@@ -198,6 +198,46 @@ describe("Uniswap", function () {
       );
     });
 
+    it("Should transfer after set tx limit", async function () {
+      const {
+        catoshi,
+        catoshiAddress,
+        liq,
+        market,
+        addr2,
+        uniswapV2,
+        uniswapV2Address,
+        decimals,
+        wethAddress,
+        wethContract,
+      } = await loadFixture(deployFixture);
+
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
+      await liq.sendTransaction({
+        to: uniswapV2Address,
+        value: parseUnits("1000", decimals),
+      });
+
+      await uniswapV2.createSwapPair();
+      await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
+      await uniswapV2.addLiquidity("weth");
+
+      await catoshi.setLaunch();
+      await catoshi.setMaxTxLimit(true, parseUnits("100000000", decimals));
+
+      await catoshi
+        .connect(market)
+        .transfer(uniswapV2Address, parseUnits("110000000", decimals));
+
+      expect(await catoshi.balanceOf(market.address)).to.equal(
+        parseUnits("340000000", decimals)
+      );
+    });
+
     it("Should fail if swap eth to token over tx limit", async function () {
       const {
         catoshi,
