@@ -27,6 +27,9 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     address public marketingWallet;
     address public devWallet;
 
+    bool public isMaxTxLimit = false;
+    uint256 public maxTxAmount = 0;
+
     address DEAD = 0x000000000000000000000000000000000000dEaD;
     address ZERO = 0x0000000000000000000000000000000000000000;
 
@@ -38,6 +41,7 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         keccak256("ClaimSlotPrize(address player,uint16 slot)");
 
     mapping(address => bool) public isTxLimitExempt;
+    mapping(address => bool) public marketPairs;
     mapping(address => bool) public blacklists;
     mapping(uint16 => uint256) public slotPrizes;
 
@@ -69,8 +73,8 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         isTxLimitExempt[_devWallet] = true;
 
         uint256 _totalSupply = 1_000_000_000 ether; // 1B
-        _mint(marketingWallet, _totalSupply.mul(40).div(100)); // 40%, for airdrop, marketing
-        _mint(devWallet, _totalSupply.mul(10).div(100)); // 10%, for CEX, dev team, burns + treasury
+        _mint(marketingWallet, _totalSupply.mul(45).div(100)); // 40%, for airdrop, marketing
+        _mint(devWallet, _totalSupply.mul(5).div(100)); // 10%, for CEX, dev team, burns + treasury
         _mint(liquidityWallet, _totalSupply.mul(50).div(100)); // 50%, for liquidity
     }
 
@@ -87,6 +91,14 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         emit Launch();
     }
 
+    function setMaxTxLimit(
+        bool _isMaxTxLimit,
+        uint256 _maxTxAmount
+    ) external onlyOwner {
+        isMaxTxLimit = _isMaxTxLimit;
+        maxTxAmount = _maxTxAmount;
+    }
+
     function setSlotPrize(uint16 slot, uint256 prize) external onlyOwner {
         slotPrizes[slot] = prize;
         emit SetSlotPrize(slot, prize);
@@ -94,6 +106,12 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
 
     function grantAllAccess(address account, bool value) external onlyOwner {
         _grantAllAccess(account, value);
+    }
+
+    function addPair(address pair, bool value) external onlyOwner {
+        marketPairs[pair] = value;
+        // isTxLimitExempt[pair] = value;
+        emit SetMarketPair(pair, value);
     }
 
     //to recieve ETH from uniswapV2Router when swaping
@@ -141,11 +159,30 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         address to,
         uint256 amount
     ) internal virtual override {
-        amount = amount;
+        if (blacklists[from] || blacklists[to]) revert BlacklistDectected();
         if (!launched && !isTxLimitExempt[from] && !isTxLimitExempt[to])
             revert NotLaunched();
 
-        if (blacklists[from] || blacklists[to]) revert BlacklistDectected();
+        if (
+            isMaxTxLimit &&
+            (marketPairs[from] || marketPairs[to]) &&
+            amount > maxTxAmount
+        ) revert InvalidTxAmount();
+
+        // // sell
+        // if (
+        //     isMaxTxLimit &&
+        //     marketPairs[to] &&
+        //     !isTxLimitExempt[from] &&
+        //     amount > maxTxAmount
+        // ) revert InvalidTxAmount();
+        // // buy
+        // if (
+        //     isMaxTxLimit &&
+        //     marketPairs[from] &&
+        //     !isTxLimitExempt[to] &&
+        //     amount > maxTxAmount
+        // ) revert InvalidTxAmount();
     }
 
     function _grantAllAccess(address account, bool value) internal virtual {

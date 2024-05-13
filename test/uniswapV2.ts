@@ -13,15 +13,20 @@ import { IERC20__factory } from "../typechain-types/factories/contracts/uniswapV
 
 const addr0 = "0x0000000000000000000000000000000000000000";
 
-describe("Lucky Catoshi ERC20", function () {
+describe("Uniswap", function () {
   async function deployFixture() {
-    const [owner, addr1, addr2, pairAddr, dev, market] =
+    const [owner, addr1, addr2, pairAddr, liq, dev, market] =
       await hre.ethers.getSigners();
     const uniswapRouter = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
-    const catoshi = await Catoshi.deploy(market.address, dev.address, {
-      maxFeePerGas: 33000000000,
-    });
+    const catoshi = await Catoshi.deploy(
+      liq.address,
+      market.address,
+      dev.address,
+      {
+        maxFeePerGas: 33000000000,
+      }
+    );
     const catoshiAddress = await catoshi.getAddress();
     const decimals = await catoshi.decimals();
 
@@ -53,6 +58,7 @@ describe("Lucky Catoshi ERC20", function () {
       addr1,
       addr2,
       pairAddr,
+      liq,
       dev,
       market,
       catoshi,
@@ -68,7 +74,7 @@ describe("Lucky Catoshi ERC20", function () {
 
   describe("Deployment", function () {
     it("Should have correct initial configuration", async function () {
-      const { catoshi, catoshiAddress, decimals, owner, uniswapV2 } =
+      const { catoshi, catoshiAddress, decimals, owner, liq, uniswapV2 } =
         await loadFixture(deployFixture);
 
       expect(await catoshi.name()).to.equal("Lucky Catoshi");
@@ -77,8 +83,8 @@ describe("Lucky Catoshi ERC20", function () {
       const totalSupply = await catoshi.totalSupply();
       expect(totalSupply).to.equal(parseUnits("1000000000", decimals));
       expect(await catoshi.owner()).to.equal(owner.address);
-      expect(await catoshi.balanceOf(owner.address)).to.equal(
-        parseUnits("750000000", decimals)
+      expect(await catoshi.balanceOf(liq.address)).to.equal(
+        parseUnits("500000000", decimals)
       );
 
       expect(await uniswapV2.tokenAddress()).to.equal(catoshiAddress);
@@ -107,18 +113,18 @@ describe("Lucky Catoshi ERC20", function () {
         catoshi,
         catoshiAddress,
         owner,
+        liq,
         uniswapV2,
         uniswapV2Address,
         decimals,
         wethAddress,
       } = await loadFixture(deployFixture);
 
-      await catoshi.transfer(
-        uniswapV2Address,
-        parseUnits("700000000", decimals)
-      );
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
       // send some eth to uniswapV2mock to let it be the liquidity provider
-      await owner.sendTransaction({
+      await liq.sendTransaction({
         to: uniswapV2Address,
         value: parseUnits("1000", decimals),
       });
@@ -126,10 +132,12 @@ describe("Lucky Catoshi ERC20", function () {
       await uniswapV2.createSwapPair();
       // grant all access to uniswapV2mock to enable it to transfer tokens before launch
       await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
       await uniswapV2.addLiquidity("weth");
 
       const pairInfo = await uniswapV2.pairInfo(catoshiAddress, wethAddress);
-      expect(pairInfo[0]).to.equal(parseUnits("350000000", decimals));
+      expect(pairInfo[0]).to.equal(parseUnits("250000000", decimals));
       expect(pairInfo[1]).to.equal(parseUnits("1000", decimals));
     });
 
@@ -138,6 +146,7 @@ describe("Lucky Catoshi ERC20", function () {
         catoshi,
         catoshiAddress,
         owner,
+        liq,
         addr2,
         uniswapV2,
         uniswapV2Address,
@@ -146,17 +155,18 @@ describe("Lucky Catoshi ERC20", function () {
         wethContract,
       } = await loadFixture(deployFixture);
 
-      await catoshi.transfer(
-        uniswapV2Address,
-        parseUnits("700000000", decimals)
-      );
-      await owner.sendTransaction({
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
+      await liq.sendTransaction({
         to: uniswapV2Address,
         value: parseUnits("1000", decimals),
       });
 
       await uniswapV2.createSwapPair();
       await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
       await uniswapV2.addLiquidity("weth");
 
       await catoshi.setLaunch();
@@ -188,11 +198,11 @@ describe("Lucky Catoshi ERC20", function () {
       );
     });
 
-    it("Should swap tokens to eth", async function () {
+    it("Should fail if swap eth to token over tx limit", async function () {
       const {
         catoshi,
         catoshiAddress,
-        owner,
+        liq,
         addr2,
         uniswapV2,
         uniswapV2Address,
@@ -201,20 +211,78 @@ describe("Lucky Catoshi ERC20", function () {
         wethContract,
       } = await loadFixture(deployFixture);
 
-      await catoshi.transfer(
-        uniswapV2Address,
-        parseUnits("500000000", decimals)
-      );
-
-      await catoshi.transfer(addr2.address, parseUnits("10000", decimals));
-
-      await owner.sendTransaction({
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
+      await liq.sendTransaction({
         to: uniswapV2Address,
         value: parseUnits("1000", decimals),
       });
 
       await uniswapV2.createSwapPair();
       await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
+      await uniswapV2.addLiquidity("weth");
+
+      await catoshi.setLaunch();
+      await catoshi.setMaxTxLimit(true, parseUnits("100000000", decimals));
+
+      await wethContract
+        .connect(addr2)
+        .deposit({ value: parseUnits("1000", decimals) });
+
+      await wethContract
+        .connect(addr2)
+        .approve(uniswapV2Address, parseUnits("1000", decimals));
+
+      const latestBlock = await hre.ethers.provider.getBlockNumber();
+      const timestamp = (await hre.ethers.provider.getBlock(latestBlock))!
+        .timestamp;
+      await expect(
+        uniswapV2
+          .connect(addr2)
+          .swap(
+            wethAddress,
+            catoshiAddress,
+            parseUnits("1000", decimals),
+            addr2.address,
+            timestamp + 1000
+          )
+      ).to.be.revertedWith("UniswapV2: TRANSFER_FAILED");
+    });
+
+    it("Should swap tokens to eth", async function () {
+      const {
+        catoshi,
+        catoshiAddress,
+        owner,
+        liq,
+        addr2,
+        uniswapV2,
+        uniswapV2Address,
+        decimals,
+        wethAddress,
+        wethContract,
+      } = await loadFixture(deployFixture);
+
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("400000000", decimals));
+
+      await catoshi
+        .connect(liq)
+        .transfer(addr2.address, parseUnits("10000", decimals));
+
+      await liq.sendTransaction({
+        to: uniswapV2Address,
+        value: parseUnits("1000", decimals),
+      });
+
+      await uniswapV2.createSwapPair();
+      await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
       await uniswapV2.addLiquidity("weth");
 
       await catoshi.setLaunch();
@@ -245,11 +313,62 @@ describe("Lucky Catoshi ERC20", function () {
       expect(ethBalance2).to.greaterThan(ethBalance);
     });
 
-    it("Should fail for public if not launched", async function () {
+    it("Should swap over tx limit even if not limit", async function () {
+      const {
+        catoshi,
+        catoshiAddress,
+        liq,
+        market,
+        uniswapV2,
+        uniswapV2Address,
+        decimals,
+        wethAddress,
+        wethContract,
+      } = await loadFixture(deployFixture);
+
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
+
+      await liq.sendTransaction({
+        to: uniswapV2Address,
+        value: parseUnits("1000", decimals),
+      });
+
+      await uniswapV2.createSwapPair();
+      await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
+      await uniswapV2.addLiquidity("weth");
+
+      await catoshi.setLaunch();
+      await catoshi.setMaxTxLimit(true, parseUnits("100000000", decimals));
+      const latestBlock = await hre.ethers.provider.getBlockNumber();
+      const timestamp = (await hre.ethers.provider.getBlock(latestBlock))!
+        .timestamp;
+
+      await catoshi
+        .connect(market)
+        .approve(uniswapV2Address, parseUnits("110000000", decimals));
+      await expect(
+        uniswapV2
+          .connect(market)
+          .swap(
+            catoshiAddress,
+            wethAddress,
+            parseUnits("110000000", decimals),
+            market.address,
+            timestamp + 1000
+          )
+      ).to.be.revertedWith("TransferHelper: TRANSFER_FROM_FAILED");
+    });
+
+    it("Should fail if swap over tx limit", async function () {
       const {
         catoshi,
         catoshiAddress,
         owner,
+        liq,
         addr2,
         uniswapV2,
         uniswapV2Address,
@@ -258,17 +377,133 @@ describe("Lucky Catoshi ERC20", function () {
         wethContract,
       } = await loadFixture(deployFixture);
 
-      await catoshi.transfer(
-        uniswapV2Address,
-        parseUnits("700000000", decimals)
-      );
-      await owner.sendTransaction({
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("300000000", decimals));
+
+      await catoshi
+        .connect(liq)
+        .transfer(addr2.address, parseUnits("110000000", decimals));
+
+      await liq.sendTransaction({
         to: uniswapV2Address,
         value: parseUnits("1000", decimals),
       });
 
       await uniswapV2.createSwapPair();
       await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
+      await uniswapV2.addLiquidity("weth");
+
+      await catoshi.setLaunch();
+
+      await catoshi.setMaxTxLimit(true, parseUnits("100000000", decimals));
+
+      const latestBlock = await hre.ethers.provider.getBlockNumber();
+      const timestamp = (await hre.ethers.provider.getBlock(latestBlock))!
+        .timestamp;
+
+      const tokenBalance = await catoshi.balanceOf(addr2.address);
+      await catoshi.connect(addr2).approve(uniswapV2Address, tokenBalance);
+      await expect(
+        uniswapV2
+          .connect(addr2)
+          .swap(
+            catoshiAddress,
+            wethAddress,
+            tokenBalance,
+            addr2.address,
+            timestamp + 1000
+          )
+      ).to.be.revertedWith("TransferHelper: TRANSFER_FROM_FAILED");
+    });
+
+    it("Should fail if in blacklist", async function () {
+      const {
+        catoshi,
+        catoshiAddress,
+        owner,
+        liq,
+        addr2,
+        uniswapV2,
+        uniswapV2Address,
+        decimals,
+        wethAddress,
+        wethContract,
+      } = await loadFixture(deployFixture);
+
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("300000000", decimals));
+
+      await catoshi
+        .connect(liq)
+        .transfer(addr2.address, parseUnits("110000000", decimals));
+
+      await liq.sendTransaction({
+        to: uniswapV2Address,
+        value: parseUnits("1000", decimals),
+      });
+
+      await uniswapV2.createSwapPair();
+      await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
+      await uniswapV2.addLiquidity("weth");
+
+      await catoshi.setLaunch();
+
+      await catoshi.setMaxTxLimit(true, parseUnits("100000000", decimals));
+
+      const latestBlock = await hre.ethers.provider.getBlockNumber();
+      const timestamp = (await hre.ethers.provider.getBlock(latestBlock))!
+        .timestamp;
+
+      const tokenBalance = await catoshi.balanceOf(addr2.address);
+
+      await catoshi.setBlacklist(addr2.address, true);
+
+      await catoshi.connect(addr2).approve(uniswapV2Address, tokenBalance);
+      await expect(
+        uniswapV2
+          .connect(addr2)
+          .swap(
+            catoshiAddress,
+            wethAddress,
+            tokenBalance,
+            addr2.address,
+            timestamp + 1000
+          )
+      ).revertedWithCustomError(catoshi, "BlacklistDectected");
+    });
+
+    it("Should fail for public if not launched", async function () {
+      const {
+        catoshi,
+        catoshiAddress,
+        owner,
+        liq,
+        addr2,
+        uniswapV2,
+        uniswapV2Address,
+        decimals,
+        wethAddress,
+        wethContract,
+      } = await loadFixture(deployFixture);
+
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
+      await liq.sendTransaction({
+        to: uniswapV2Address,
+        value: parseUnits("1000", decimals),
+      });
+
+      await uniswapV2.createSwapPair();
+      await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
       await uniswapV2.addLiquidity("weth");
 
       await wethContract
@@ -300,6 +535,7 @@ describe("Lucky Catoshi ERC20", function () {
         catoshi,
         catoshiAddress,
         owner,
+        liq,
         dev,
         uniswapV2,
         uniswapV2Address,
@@ -308,17 +544,18 @@ describe("Lucky Catoshi ERC20", function () {
         wethContract,
       } = await loadFixture(deployFixture);
 
-      await catoshi.transfer(
-        uniswapV2Address,
-        parseUnits("700000000", decimals)
-      );
-      await owner.sendTransaction({
+      await catoshi
+        .connect(liq)
+        .transfer(uniswapV2Address, parseUnits("500000000", decimals));
+      await liq.sendTransaction({
         to: uniswapV2Address,
         value: parseUnits("1000", decimals),
       });
 
       await uniswapV2.createSwapPair();
       await catoshi.grantAllAccess(uniswapV2Address, true);
+      const wethPair = await uniswapV2.swapPairsMap("weth");
+      await catoshi.addPair(wethPair, true);
       await uniswapV2.addLiquidity("weth");
       const usdtPair = await uniswapV2.swapPairsMap("usdt");
 
