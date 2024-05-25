@@ -15,13 +15,14 @@ const addr0 = "0x0000000000000000000000000000000000000000";
 
 describe("Uniswap", function () {
   async function deployFixture() {
-    const [owner, addr1, addr2, pairAddr, liq, dev, market] =
+    const [owner, addr1, addr2, pairAddr, liq, dev, market, airdrop] =
       await hre.ethers.getSigners();
     const uniswapRouter = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
     const Catoshi = await hre.ethers.getContractFactory("LuckyCatoshiToken");
     const catoshi = await Catoshi.deploy(
       liq.address,
       market.address,
+      airdrop.address,
       dev.address,
       {
         maxFeePerGas: 33000000000,

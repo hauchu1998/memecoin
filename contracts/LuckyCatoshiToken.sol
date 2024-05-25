@@ -25,6 +25,7 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
 
     address public liquidityWallet;
     address public marketingWallet;
+    address public airdropWallet;
     address public devWallet;
 
     bool public isMaxTxLimit = false;
@@ -59,10 +60,12 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     constructor(
         address _liquitidyWallet,
         address _marketWallet,
+        address _airdropWallet,
         address _devWallet
     ) Ownable() ERC20(_name, _symbol) ERC20Permit(_name) {
         liquidityWallet = _liquitidyWallet;
         marketingWallet = _marketWallet;
+        airdropWallet = _airdropWallet;
         devWallet = _devWallet;
 
         isTxLimitExempt[DEAD] = true;
@@ -70,12 +73,14 @@ contract LuckyCatoshiToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         isTxLimitExempt[address(this)] = true;
         isTxLimitExempt[_liquitidyWallet] = true;
         isTxLimitExempt[_marketWallet] = true;
+        isTxLimitExempt[_airdropWallet] = true;
         isTxLimitExempt[_devWallet] = true;
 
-        uint256 _totalSupply = 1_000_000_000 ether; // 1B
-        _mint(marketingWallet, _totalSupply.mul(45).div(100)); // 40%, for airdrop, marketing
-        _mint(devWallet, _totalSupply.mul(5).div(100)); // 10%, for CEX, dev team, burns + treasury
+        uint256 _totalSupply = 1_000_000_000 ether; //
         _mint(liquidityWallet, _totalSupply.mul(50).div(100)); // 50%, for liquidity
+        _mint(marketingWallet, _totalSupply.mul(12).div(100)); // 12%, marketing
+        _mint(airdropWallet, _totalSupply.mul(30).div(100)); // 30%, for airdrop, marketing
+        _mint(devWallet, _totalSupply.mul(8).div(100)); // 10%, for CEX, dev team, burns + treasury
     }
 
     function setBlacklist(
